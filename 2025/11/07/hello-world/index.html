@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Immersive Weather Card</title>
+    <style>
+        :root {
+            --bg-color-1: #87CEEB;
+            --bg-color-2: #4682B4;
+            --card-bg-color: rgba(255, 255, 255, 0.1);
+            --text-color: #ffffff;
+            --accent-color: #FFD700;
+            --shadow-color: rgba(0, 0, 0, 0.2);
+        }
+
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: linear-gradient(45deg, var(--bg-color-1), var(--bg-color-2));
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            transition: background 3s ease-in-out;
+            overflow: hidden;
+        }
+
+        #weather-card {
+            width: 350px;
+            height: 550px;
+            background: var(--card-bg-color);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px 0 var(--shadow-color);
+            position: relative;
+            overflow: hidden;
+            color: var(--text-color);
+            transition: all 0.5s ease;
+            transform-style: preserve-3d;
+        }
+
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        .content {
+            position: relative;
+            z-index: 2;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            box-sizing: border-box;
+        }
+
+        #scene-switcher {
+            display: flex;
+            justify-content: space-around;
+            padding: 10px 0;
+            background: rgba(0,0,0,0.1);
+            border-radius: 15px;
+            margin-bottom: 20px;
+        }
+
+        .scene-btn {
+            background: none;
+            border: none;
+            color: var(--text-color);
+            font-size: 24px;
+            cursor: pointer;
+            transition: transform 0.3s, color 0.3s;
+            padding: 5px;
+            border-radius: 50%;
+        }
+
+        .scene-btn:hover {
+            transform: scale(1.2);
+            color: var(--accent-color);
+        }
+        .scene-btn.active {
+            color: var(--accent-color);
+            text-shadow: 0 0 15px var(--accent-color);
+        }
+
+        #info-display {
+            text-align: center;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #temperature {
+            font-size: 80px;
+            font-weight: 200;
+            line-height: 1;
+            position: relative;
+        }
+        #temperature::after {
+            content: '°C';
+            font-size: 30px;
+            position: absolute;
+            top: 10px;
+            right: -30px;
+        }
+
+        #weather-description {
+            font-size: 24px;
+            font-weight: 400;
+            margin-top: 10px;
+        }
+        
+        #location {
+            font-size: 18px;
+            font-weight: 300;
+            margin-top: 5px;
+        }
+
+        #details {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 30px;
+            width: 100%;
+        }
+
+        .detail-item {
+            text-align: center;
+        }
+
+        .detail-item .value {
+            font-size: 18px;
+            font-weight: 500;
+        }
+
+        .detail-item .label {
+            font-size: 12px;
+            font-weight: 300;
+            opacity: 0.8;
+        }
+
+        #music-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 15px 0;
+        }
+
+        #play-pause-btn, #volume-icon {
+            background: none;
+            border: none;
+            color: var(--text-color);
+            font-size: 22px;
+            cursor: pointer;
+            margin: 0 10px;
+        }
+
+        #volume-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 2px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        #volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            background: var(--text-color);
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        
+        #volume-slider::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            background: var(--text-color);
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        #initial-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 10;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            cursor: pointer;
+            transition: opacity 0.5s;
+        }
+        #initial-overlay p {
+            font-size: 20px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="weather-card">
+    <canvas id="canvas"></canvas>
+    <div id="initial-overlay">
+        <p>Click to start the experience</p>
+    </div>
+    <div class="content">
+        <div id="scene-switcher">
+            <button class="scene-btn active" data-weather="sunny">☀️</button>
+            <button class="scene-btn" data-weather="rainy">🌧️</button>
+            <button class="scene-btn" data-weather="snowy">❄️</button>
+            <button class="scene-btn" data-weather="windy">💨</button>
+        </div>
+
+        <div id="info-display">
+            <div id="temperature">25</div>
+            <div id="weather-description">Sunny</div>
+            <div id="location">Dreamland</div>
+            <div id="details">
+                <div class="detail-item">
+                    <div class="value" id="humidity">60%</div>
+                    <div class="label">Humidity</div>
+                </div>
+                <div class="detail-item">
+                    <div class="value" id="wind-speed">10 km/h</div>
+                    <div class="label">Wind</div>
+                </div>
+                <div class="detail-item">
+                    <div class="value" id="uv-index">High</div>
+                    <div class="label">UV Index</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="music-controls">
+            <button id="play-pause-btn">▶️</button>
+            <span id="volume-icon">🔊</span>
+            <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="0.5">
+        </div>
+    </div>
+</div>
+
+<script>
+// Polyfill for older browsers
+window.AudioContext = window.AudioContext || window.webkitAudioContext;
+
+class WeatherMusicEngine {
+    constructor() {
+        this.audioContext = null;
+        this.masterGain = null;
+        this.scenes = {};
+        this.currentScene = null;
+        this.isInitialized = false;
+        this.isPlaying = false;
+    }
+
+    init() {
+        if (this.isInitialized) return;
+        this.audioContext = new AudioContext();
+        this.masterGain = this.audioContext.createGain();
+        this.masterGain.connect(this.audioContext.destination);
+        
+        this.scenes = {
+            sunny: new SunnyMusic(this.audioContext, this.masterGain),
+            rainy: new RainyMusic(this.audioContext, this.masterGain),
+            snowy: new SnowyMusic(this.audioContext, this.masterGain),
+            windy: new WindyMusic(this.audioContext, this.masterGain)
+        };
+        this.isInitialized = true;
+    }
+
+    switchScene(weather) {
+        if (!this.isInitialized) return;
+        
+        const now = this.audioContext.currentTime;
+        const fadeDuration = 3;
+
+        if (this.currentScene && this.currentScene !== this.scenes[weather]) {
+            this.currentScene.stop(now, fadeDuration);
+        }
+        
+        this.currentScene = this.scenes[weather];
+        if (this.isPlaying) {
+            this.currentScene.play(now, fadeDuration);
+        }
+    }
+
+    togglePlay() {
+        if (!this.isInitialized) this.init();
+        
+        this.isPlaying = !this.isPlaying;
+        const now = this.audioContext.currentTime;
+
+        if (this.isPlaying) {
+            if (this.audioContext.state === 'suspended') {
+                this.audioContext.resume();
+            }
+            if (this.currentScene) {
+                this.currentScene.play(now, 1);
+            }
+        } else {
+            if (this.currentScene) {
+                this.currentScene.stop(now, 1);
+            }
+        }
+        return this.isPlaying;
+    }
+
+    setVolume(value) {
+        if(this.masterGain) {
+            this.masterGain.gain.setValueAtTime(value, this.audioContext.currentTime);
+        }
+    }
+}
+
+class MusicScene {
+    constructor(audioContext, destination) {
+        this.audioContext = audioContext;
+        this.destination = destination;
+        this.sceneGain = this.audioContext.createGain();
+        this.sceneGain.connect(this.destination);
+        this.isPlaying = false;
+    }
+
+    play(when, fadeDuration) {
+        this.isPlaying = true;
+        this.sceneGain.gain.cancelScheduledValues(when);
+        this.sceneGain.gain.setValueAtTime(0, when);
+        this.sceneGain.gain.linearRampToValueAtTime(1, when + fadeDuration);
+    }
+
+    stop(when, fadeDuration) {
+        this.isPlaying = false;
+        this.sceneGain.gain.cancelScheduledValues(when);
+        this.sceneGain.gain.setValueAtTime(this.sceneGain.gain.value, when);
+        this.sceneGain.gain.linearRampToValueAtTime(0, when + fadeDuration);
+    }
+}
+
+class SunnyMusic extends MusicScene {
+    constructor(audioContext, destination) {
+        super(audioContext, destination);
+        // Simple melody for now
+        this.osc = audioContext.createOscillator();
+        this.osc.type = 'sine';
+        this.osc.frequency.setValueAtTime(440, 0);
+        this.osc.connect(this.sceneGain);
+        this.osc.start();
+    }
+}
+
+class RainyMusic extends MusicScene {
+    constructor(audioContext, destination) {
+        super(audioContext, destination);
+        // White noise for rain
+        const bufferSize = audioContext.sampleRate * 2;
+        const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = Math.random() * 2 - 1;
+        }
+        this.noise = audioContext.createBufferSource();
+        this.noise.buffer = buffer;
+        this.noise.loop = true;
+
+        this.filter = audioContext.createBiquadFilter();
+        this.filter.type = 'lowpass';
+        this.filter.frequency.value = 1000;
+
+        this.noise.connect(this.filter).connect(this.sceneGain);
+        this.noise.start();
+    }
+}
+
+class SnowyMusic extends MusicScene {
+     constructor(audioContext, destination) {
+        super(audioContext, destination);
+        this.osc = audioContext.createOscillator();
+        this.osc.type = 'triangle';
+        this.osc.frequency.setValueAtTime(220, 0);
+        
+        this.lfo = audioContext.createOscillator();
+        this.lfo.type = 'sine';
+        this.lfo.frequency.value = 5;
+        
+        const lfoGain = audioContext.createGain();
+        lfoGain.gain.value = 10;
+
+        this.lfo.connect(lfoGain).connect(this.osc.frequency);
+        
+        this.osc.connect(this.sceneGain);
+        this.osc.start();
+        this.lfo.start();
+    }
+}
+
+class WindyMusic extends MusicScene {
+    constructor(audioContext, destination) {
+        super(audioContext, destination);
+        // Pink noise for wind
+        const bufferSize = audioContext.sampleRate * 2;
+        const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+        const data = buffer.getChannelData(0);
+        let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+        for (let i = 0; i < bufferSize; i++) {
+            const white = Math.random() * 2 - 1;
+            b0 = 0.99886 * b0 + white * 0.0555179;
+            b1 = 0.99332 * b1 + white * 0.0750759;
+            b2 = 0.96900 * b2 + white * 0.1538520;
+            b3 = 0.86650 * b3 + white * 0.3104856;
+            b4 = 0.55000 * b4 + white * 0.5329522;
+            b5 = -0.7616 * b5 - white * 0.0168980;
+            data[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
+            data[i] *= 0.11;
+            b6 = white * 0.115926;
+        }
+        this.noise = audioContext.createBufferSource();
+        this.noise.buffer = buffer;
+        this.noise.loop = true;
+
+        this.filter = audioContext.createBiquadFilter();
+        this.filter.type = 'bandpass';
+        this.filter.frequency.value = 800;
+        this.filter.Q.value = 5;
+
+        this.noise.connect(this.filter).connect(this.sceneGain);
+        this.noise.start();
+    }
+}
+
+
+class WeatherCard {
+    constructor() {
+        this.card = document.getElementById('weather-card');
+        this.canvas = document.getElementById('canvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.musicEngine = new WeatherMusicEngine();
+        
+        this.weatherData = {
+            sunny: { temp: 25, desc: 'Sunny', location: 'Dreamland', humidity: '60%', wind: '10 km/h', uv: 'High', colors: ['#FFD700', '#FFA500'] },
+            rainy: { temp: 15, desc: 'Rainy', location: 'Stormville', humidity: '90%', wind: '25 km/h', uv: 'Low', colors: ['#4682B4', '#2F4F4F'] },
+            snowy: { temp: -5, desc: 'Snowy', location: 'Winterfell', humidity: '80%', wind: '15 km/h', uv: 'Low', colors: ['#ADD8E6', '#4682B4'] },
+            windy: { temp: 18, desc: 'Windy', location: 'Gale Plains', humidity: '70%', wind: '50 km/h', uv: 'Medium', colors: ['#A9A9A9', '#778899'] }
+        };
+        this.currentWeather = 'sunny';
+        this.particles = [];
+
+        this.bindEvents();
+        this.resizeCanvas();
+        this.updateInfo();
+        this.updateColors();
+        this.musicEngine.switchScene(this.currentWeather);
+        this.animate();
+    }
+
+    resizeCanvas() {
+        this.canvas.width = this.card.clientWidth;
+        this.canvas.height = this.card.clientHeight;
+    }
+
+    bindEvents() {
+        window.addEventListener('resize', () => this.resizeCanvas());
+
+        document.getElementById('initial-overlay').addEventListener('click', () => {
+            document.getElementById('initial-overlay').style.opacity = 0;
+            document.getElementById('initial-overlay').style.pointerEvents = 'none';
+            this.musicEngine.init();
+            this.musicEngine.switchScene(this.currentWeather);
+        }, { once: true });
+
+        document.querySelectorAll('.scene-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                this.currentWeather = e.target.dataset.weather;
+                document.querySelectorAll('.scene-btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                this.updateInfo();
+                this.updateColors();
+                this.musicEngine.switchScene(this.currentWeather);
+                this.createParticles();
+            });
+        });
+
+        document.getElementById('play-pause-btn').addEventListener('click', (e) => {
+            const isPlaying = this.musicEngine.togglePlay();
+            e.target.textContent = isPlaying ? '⏸️' : '▶️';
+        });
+
+        document.getElementById('volume-slider').addEventListener('input', (e) => {
+            this.musicEngine.setVolume(e.target.value);
+        });
+        
+        this.card.addEventListener('mousemove', (e) => {
+            const rect = this.card.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const rotateX = (y / rect.height - 0.5) * -30;
+            const rotateY = (x / rect.width - 0.5) * 30;
+            this.card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
+        });
+
+        this.card.addEventListener('mouseleave', () => {
+            this.card.style.transform = 'perspective(1000px) rotateX(0) rotateY(0)';
+        });
+    }
+
+    updateInfo() {
+        const data = this.weatherData[this.currentWeather];
+        document.getElementById('temperature').textContent = data.temp;
+        document.getElementById('weather-description').textContent = data.desc;
+        document.getElementById('location').textContent = data.location;
+        document.getElementById('humidity').textContent = data.humidity;
+        document.getElementById('wind-speed').textContent = data.wind;
+        document.getElementById('uv-index').textContent = data.uv;
+    }
+
+    updateColors() {
+        const colors = this.weatherData[this.currentWeather].colors;
+        document.body.style.setProperty('--bg-color-1', colors[0]);
+        document.body.style.setProperty('--bg-color-2', colors[1]);
+    }
+
+    createParticles() {
+        this.particles = [];
+        let particleCount = 0;
+        if (this.currentWeather === 'rainy') particleCount = 100;
+        if (this.currentWeather === 'snowy') particleCount = 150;
+        if (this.currentWeather === 'windy') particleCount = 50;
+
+
+        for (let i = 0; i < particleCount; i++) {
+            this.particles.push({
+                x: Math.random() * this.canvas.width,
+                y: Math.random() * this.canvas.height,
+                vx: 0,
+                vy: 0,
+                size: Math.random() * 3 + 1,
+                opacity: Math.random() * 0.5 + 0.5
+            });
+        }
+    }
+
+    animate() {
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        if (this.currentWeather === 'sunny') {
+            // Sun rays
+            const sunX = this.canvas.width / 2;
+            const sunY = this.canvas.height / 4;
+            for(let i=0; i<12; i++) {
+                this.ctx.beginPath();
+                this.ctx.strokeStyle = `rgba(255, 223, 100, ${Math.sin(Date.now()/1000 + i) * 0.1 + 0.1})`;
+                this.ctx.moveTo(sunX, sunY);
+                const angle = (Date.now() / 5000) + (i * Math.PI / 6);
+                this.ctx.lineTo(sunX + Math.cos(angle) * 300, sunY + Math.sin(angle) * 300);
+                this.ctx.lineWidth = 2;
+                this.ctx.stroke();
+            }
+        }
+
+        this.particles.forEach(p => {
+            if (this.currentWeather === 'rainy') {
+                p.vy = p.size * 2;
+                p.vx = -1;
+                p.y += p.vy;
+                p.x += p.vx;
+                if (p.y > this.canvas.height) {
+                    p.y = 0;
+                    p.x = Math.random() * this.canvas.width;
+                }
+                this.ctx.fillStyle = `rgba(173, 216, 230, ${p.opacity})`;
+                this.ctx.fillRect(p.x, p.y, 1, p.size * 5);
+            } else if (this.currentWeather === 'snowy') {
+                p.vy = p.size;
+                p.vx = Math.sin(p.y / 50) * 0.5;
+                p.y += p.vy;
+                p.x += p.vx;
+                if (p.y > this.canvas.height) {
+                    p.y = 0;
+                    p.x = Math.random() * this.canvas.width;
+                }
+                this.ctx.fillStyle = `rgba(255, 255, 255, ${p.opacity})`;
+                this.ctx.beginPath();
+                this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                this.ctx.fill();
+            } else if (this.currentWeather === 'windy') {
+                p.vx = p.size * 3 + 5;
+                p.x += p.vx;
+                if (p.x > this.canvas.width) {
+                    p.x = 0;
+                    p.y = Math.random() * this.canvas.height;
+                }
+                this.ctx.strokeStyle = `rgba(255, 255, 255, ${p.opacity})`;
+                this.ctx.lineWidth = p.size / 2;
+                this.ctx.beginPath();
+                this.ctx.moveTo(p.x, p.y);
+                this.ctx.lineTo(p.x - 10, p.y);
+                this.ctx.stroke();
+            }
+        });
+
+        requestAnimationFrame(() => this.animate());
+    }
+}
+
+new WeatherCard();
+
+</script>
+</body>
+</html>
